@@ -32,7 +32,9 @@ yarn-error.log*
 
 # env files
 .env*
-!.env.example
+
+# documentation / markdown
+*.md
 
 # python
 __pycache__/
