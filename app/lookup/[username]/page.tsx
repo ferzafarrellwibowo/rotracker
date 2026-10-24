@@ -2,6 +2,7 @@ import type { RobloxProfileData, APIErrorResponse } from "@/app/types";
 import Dashboard from "@/app/components/Dashboard";
 import { headers } from "next/headers";
 import Link from "next/link";
+import Image from "next/image";
 
 async function fetchProfile(
   username: string
@@ -38,35 +39,42 @@ export default async function LookupPage({
   const { data, error } = await fetchProfile(username);
 
   return (
-    <div className="flex flex-col flex-1 bg-[#000000] min-h-screen">
+    <div className="flex min-h-screen flex-1 flex-col bg-background">
       {/* Top bar */}
-      <nav className="flex items-center justify-between px-4 py-3 border-b border-[#222]">
+      <nav className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b border-border bg-background/95 px-4 sm:px-6">
         <Link
           href="/"
-          className="font-[family-name:var(--font-jetbrains-mono)] text-sm text-[#e5e5e5] no-underline hover:text-[#fff]"
+          className="flex items-center no-underline transition-opacity duration-150 hover:opacity-80"
         >
-          roTracker
+          <Image
+            src="/roTracker-logo.svg"
+            alt="roTracker"
+            width={270}
+            height={90}
+            priority
+            className="h-7 w-auto"
+          />
         </Link>
-        <span className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[#555]">
+        <span className="min-w-0 truncate text-xs text-fg-muted">
           /{username}
         </span>
       </nav>
 
       {/* Content */}
-      <main className="flex-1 py-6 px-4">
+      <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">
         {error ? (
-          <div className="max-w-2xl mx-auto border border-[#333] rounded-none bg-[#111] px-4 py-6">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="font-[family-name:var(--font-jetbrains-mono)] text-sm text-[#ef4444]">
+          <div className="card mx-auto max-w-2xl px-6 py-6">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="border border-danger-line bg-danger-subtle px-2 py-0.5 text-xs font-medium tracking-wide text-danger">
                 ERROR
               </span>
             </div>
-            <p className="font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#999]">
+            <p className="text-sm text-fg-secondary">
               {error}
             </p>
             <Link
               href="/"
-              className="inline-block mt-4 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#888] border border-[#333] px-3 py-1.5 rounded-none no-underline hover:bg-[#1a1a1a]"
+              className="btn btn-secondary btn-sm mt-6"
             >
               ← Back
             </Link>
@@ -77,8 +85,8 @@ export default async function LookupPage({
       </main>
 
       {/* Footer */}
-      <footer className="px-4 py-3 border-t border-[#222]">
-        <span className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[#333]">
+      <footer className="border-t border-border px-4 py-4 sm:px-6">
+        <span className="label-micro text-fg-muted/70">
           SYSTEM v0.1.0
         </span>
       </footer>

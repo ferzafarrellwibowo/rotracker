@@ -18,27 +18,27 @@ export default function Accordion({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-[#333] rounded-none">
+    <div className="card overflow-hidden">
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-[#111] text-[#e5e5e5] cursor-pointer select-none rounded-none border-none outline-none"
+        className="flex w-full cursor-pointer select-none items-center justify-between gap-4 px-4 py-3 text-fg transition-colors duration-150 hover:bg-surface-elevated focus-visible:outline-offset-[-2px]"
         aria-expanded={isOpen}
       >
         <span className="flex items-center gap-3">
-          <span className="font-[family-name:var(--font-jetbrains-mono)] text-base">
+          <span className="text-base text-fg-muted" aria-hidden="true">
             {icon}
           </span>
-          <span className="text-sm font-medium tracking-wide uppercase">
+          <span className="text-sm font-medium tracking-tight">
             {title}
           </span>
         </span>
-        <span className="font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#888]">
+        <span className="text-xs text-fg-muted">
           {isOpen ? "Collapse ←" : "Expand →"}
         </span>
       </button>
       {isOpen && (
-        <div className="bg-[#0a0a0a] px-4 py-4 border-t border-[#333]">
+        <div className="border-t border-border px-4 py-4">
           {children}
         </div>
       )}

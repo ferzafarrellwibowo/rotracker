@@ -1,26 +1,35 @@
+import Image from "next/image";
+
 export default function Loading() {
   return (
-    <div className="flex flex-col flex-1 bg-[#000000] min-h-screen">
+    <div className="flex min-h-screen flex-1 flex-col bg-background">
       {/* Top bar placeholder */}
-      <nav className="flex items-center justify-between px-4 py-3 border-b border-[#222]">
-        <div className="font-[family-name:var(--font-jetbrains-mono)] text-sm text-[#e5e5e5]">
-          roTracker
+      <nav className="flex h-14 items-center justify-between border-b border-border px-4 sm:px-6">
+        <div className="flex items-center">
+          <Image
+            src="/roTracker-logo.svg"
+            alt="roTracker"
+            width={270}
+            height={90}
+            priority
+            className="h-7 w-auto"
+          />
         </div>
       </nav>
 
       {/* Loading Content */}
-      <main className="flex-1 py-12 px-4 flex flex-col items-center justify-center">
-        <div className="flex flex-col items-center max-w-md w-full border border-[#333] bg-[#0a0a0a] p-8 shadow-2xl">
-          <div className="w-10 h-10 border-2 border-[#333] border-t-[#fff] rounded-full animate-spin mb-6"></div>
-          <h2 className="text-[#e5e5e5] text-sm uppercase tracking-widest font-medium mb-3">
+      <main className="bg-grid flex flex-1 flex-col items-center justify-center px-4 py-12">
+        <div className="card flex w-full max-w-md flex-col items-center p-8" role="status" aria-live="polite">
+          <div className="mb-6 h-10 w-10 animate-spin rounded-full border-2 border-border border-t-accent"></div>
+          <h2 className="mb-3 text-sm font-medium uppercase tracking-[0.08em] text-fg">
             Scanning Target...
           </h2>
-          <p className="text-[#888] text-xs font-[family-name:var(--font-jetbrains-mono)] text-center mb-6">
+          <p className="mb-6 text-center text-[13px] leading-relaxed text-fg-secondary">
             Connecting to Roblox servers and compiling data.
-            This process requires deep inspection and might take some time depending on the target's history.
+            This process requires deep inspection and might take some time depending on the target&apos;s history.
           </p>
-          <div className="w-full bg-[#111] h-1 border border-[#333] overflow-hidden relative">
-            <div className="absolute top-0 left-0 h-full w-1/3 bg-[#444] animate-[slide_1.5s_ease-in-out_infinite]"></div>
+          <div className="relative h-1 w-full overflow-hidden bg-surface-elevated">
+            <div className="absolute left-0 top-0 h-full w-1/3 bg-accent/70 animate-[slide_1.5s_ease-in-out_infinite]"></div>
           </div>
         </div>
       </main>

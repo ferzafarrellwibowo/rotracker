@@ -19,22 +19,22 @@ function Section({
   headerRight?: React.ReactNode;
 }) {
   return (
-    <div className="border border-[#333] rounded-none">
-      <div className="w-full flex justify-between items-center px-4 py-3 bg-[#111] text-[#e5e5e5] rounded-none border-none">
-        <span className="flex items-center gap-3">
-          <span className="font-[family-name:var(--font-jetbrains-mono)] text-base">
+    <section className="card overflow-hidden">
+      <div className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <h2 className="flex min-w-0 items-center gap-3">
+          <span className="w-4 shrink-0 text-center text-sm text-fg-muted grayscale" aria-hidden="true">
             {icon}
           </span>
-          <span className="text-sm font-medium tracking-wide uppercase">
+          <span className="truncate text-sm font-medium text-fg">
             {title}
           </span>
-        </span>
-        {headerRight && <div>{headerRight}</div>}
+        </h2>
+        {headerRight && <div className="shrink-0">{headerRight}</div>}
       </div>
-      <div className="bg-[#0a0a0a] px-4 py-4 border-t border-[#333]">
+      <div className="px-5 py-4">
         {children}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -51,17 +51,17 @@ function DataRow({
 }) {
   return (
     <div
-      className={`flex py-1.5 border-b border-[#1a1a1a] last:border-b-0 ${
-        isBlock ? "flex-col gap-2 items-start" : "justify-between items-baseline"
+      className={`flex gap-4 border-b border-border/60 py-2.5 last:border-b-0 ${
+        isBlock ? "flex-col items-start gap-2" : "items-baseline justify-between"
       }`}
     >
-      <span className="text-xs text-[#888] uppercase tracking-wide">
+      <span className="shrink-0 text-[13px] text-fg-secondary">
         {label}
       </span>
       <span
-        className={`text-sm text-[#e5e5e5] ${
-          mono ? "font-[family-name:var(--font-jetbrains-mono)]" : ""
-        } ${isBlock ? "w-full" : ""}`}
+        className={`min-w-0 text-[13px] text-fg ${
+          mono ? "tabular-nums" : ""
+        } ${isBlock ? "w-full" : "truncate text-right"}`}
       >
         {value}
       </span>
@@ -72,17 +72,24 @@ function DataRow({
 function SuspicionBar({ score }: { score: number }) {
   const color =
     score <= 15
-      ? "#4ade80"
+      ? "var(--success)"
       : score <= 40
-        ? "#facc15"
+        ? "var(--warning)"
         : score <= 70
-          ? "#f97316"
-          : "#ef4444";
+          ? "var(--caution)"
+          : "var(--danger)";
 
   return (
-    <div className="w-full h-4 bg-[#1a1a1a] rounded-none border border-[#333]">
+    <div
+      className="h-2 w-full overflow-hidden bg-surface-elevated"
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={score}
+      aria-label="Suspicion rating"
+    >
       <div
-        className="h-full rounded-none"
+        className="h-full transition-[width] duration-200"
         style={{
           width: `${score}%`,
           backgroundColor: color,
@@ -104,12 +111,24 @@ function StatBlock({
   return (
     <div 
       onClick={onClick}
-      className={`flex flex-col items-center border border-[#222] rounded-none px-4 py-3 bg-[#0f0f0f] ${onClick ? 'cursor-pointer hover:bg-[#1a1a1a] transition-colors' : ''}`}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={`flex min-w-0 flex-col items-center border border-border bg-background px-2 py-3 sm:px-3 ${onClick ? 'cursor-pointer transition-colors duration-150 hover:border-border-strong hover:bg-surface-elevated' : ''}`}
     >
-      <span className="font-[family-name:var(--font-jetbrains-mono)] text-xl text-[#e5e5e5]">
+      <span className="text-lg font-medium tabular-nums tracking-tight text-fg">
         {typeof value === "number" ? value.toLocaleString() : value}
       </span>
-      <span className="text-[10px] text-[#666] uppercase tracking-widest mt-1">
+      <span className="label-micro mt-1 truncate">
         {label}
       </span>
     </div>
@@ -180,8 +199,19 @@ export default function Dashboard({ data }: DashboardProps) {
     setTimelineError(null);
     try {
       const res = await fetch(`/api/roblox/${data.username}/timeline`);
-      if (!res.ok) throw new Error("Failed to fetch timeline");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to fetch timeline");
+      }
       const result = await res.json();
+      if (result.canViewInventory === false) {
+        setTimelineError("Inventory is private, badges cannot be viewed.");
+        return;
+      }
+      if (!result.timeline || result.timeline.length === 0) {
+        setTimelineError("No badge data found.");
+        return;
+      }
       setTimelineData(result.timeline);
     } catch (err: any) {
       setTimelineError(err.message || "Failed to load timeline");
@@ -214,7 +244,10 @@ export default function Dashboard({ data }: DashboardProps) {
     return { ticks, max: step * 7 };
   };
   
-  const { ticks: yAxisTicks, max: yAxisMax } = calculateYAxisTicks(data.badges?.total ?? 0);
+  const timelineMax = timelineData && timelineData.length > 0
+    ? timelineData[timelineData.length - 1].count
+    : (data.badges?.total ?? 0);
+  const { ticks: yAxisTicks, max: yAxisMax } = calculateYAxisTicks(timelineMax);
   
   const joinTimestamp = data.joinDate ? new Date(data.joinDate).getTime() : Date.now() - 365 * 24 * 60 * 60 * 1000;
   const currentTimestamp = Date.now();
@@ -229,69 +262,69 @@ export default function Dashboard({ data }: DashboardProps) {
   }
   const scoreColor =
     data.aiAnalysis.score <= 15
-      ? "text-[#4ade80]"
+      ? "text-success"
       : data.aiAnalysis.score <= 40
-        ? "text-[#facc15]"
+        ? "text-warning"
         : data.aiAnalysis.score <= 70
-          ? "text-[#f97316]"
-          : "text-[#ef4444]";
+          ? "text-caution"
+          : "text-danger";
 
   return (
-    <div className="w-full max-w-[95%] 2xl:max-w-[1600px] mx-auto flex flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4">
       <div className="flex justify-start">
         <button 
           onClick={() => router.push('/')}
-          className="px-4 py-2 bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#333] text-[#888] hover:text-[#fff] transition-colors rounded-none flex items-center justify-center font-[family-name:var(--font-jetbrains-mono)] text-xs uppercase tracking-wider gap-2"
+          className="btn btn-secondary btn-sm"
           title="Back to Search"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
           Back to Search
         </button>
       </div>
       {/* Header */}
-      <div className="border border-[#333] rounded-none bg-[#111] px-6 py-5 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-        <div className="flex items-center gap-5">
+      <div className="card mb-2 flex flex-col justify-between gap-6 px-5 py-5 sm:flex-row sm:items-center sm:px-6">
+        <div className="flex min-w-0 items-center gap-5">
           {data.avatarUrl && (
             <img
               src={data.avatarUrl}
               alt={`${data.username} avatar`}
-              className="w-24 h-24 object-contain"
+              className="h-20 w-20 shrink-0 border border-border bg-background object-contain sm:h-24 sm:w-24"
             />
           )}
-          <div className="flex flex-col">
-            <div className="flex items-baseline gap-3">
-              <span className="font-[family-name:var(--font-jetbrains-mono)] text-lg text-[#e5e5e5]">
+          <div className="flex min-w-0 flex-col">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="truncate text-xl font-semibold tracking-tight text-fg">
                 {data.displayName}
               </span>
-              <span className="font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#666]">
+              <span className="truncate text-sm text-fg-muted">
                 @{data.username}
               </span>
               <span 
-                className={`w-2 h-2 rounded-full ml-1 ${
+                className={`h-2 w-2 shrink-0 ${
                   localPresence?.userPresenceType === 2 
-                    ? 'bg-[#4ade80] shadow-[0_0_8px_rgba(74,222,128,0.5)]' 
+                    ? 'bg-success' 
                     : localPresence?.userPresenceType === 3
-                      ? 'bg-[#f97316] shadow-[0_0_8px_rgba(249,115,22,0.5)]'
+                      ? 'bg-caution'
                       : localPresence?.isOnline
-                        ? 'bg-[#3b82f6] shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                        : 'bg-[#555555]'
+                        ? 'bg-accent'
+                        : 'bg-fg-muted/50'
                 }`} 
                 title={localPresence?.lastLocation || (localPresence?.isOnline ? "Online" : "Offline")}
               ></span>
             </div>
-            <div className="font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[#555] mt-1">
+            <div className="mt-1 text-xs tabular-nums text-fg-muted">
               ID:{data.userId} · Scanned{" "}
               {scannedAt ? `${scannedAt} UTC` : "..."}
             </div>
             {localPresence?.userPresenceType === 2 && localPresence.lastLocation && (
-              <div className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[#4ade80] mt-1.5 truncate max-w-[200px] sm:max-w-[350px]">
+              <div className="mt-2 max-w-[200px] truncate text-xs text-success sm:max-w-[350px]">
                 {localPresence.lastLocation.startsWith('Playing') ? '' : 'Playing: '}{localPresence.lastLocation}
               </div>
             )}
             {localPresence?.userPresenceType === 3 && localPresence.lastLocation && (
-              <div className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[#f97316] mt-1.5 truncate max-w-[200px] sm:max-w-[350px]">
+              <div className="mt-2 max-w-[200px] truncate text-xs text-caution sm:max-w-[350px]">
                 {localPresence.lastLocation.startsWith('Making') ? '' : 'Making: '}{localPresence.lastLocation}
               </div>
             )}
@@ -299,69 +332,71 @@ export default function Dashboard({ data }: DashboardProps) {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-3 sm:pr-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button 
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="p-2 bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#333] text-[#888] hover:text-[#fff] transition-colors rounded-none flex items-center justify-center disabled:opacity-50"
+            className="btn btn-secondary btn-icon"
             title="Refresh Status"
+            aria-label="Refresh Status"
           >
             <svg 
-              className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} 
+              className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} 
               fill="none" 
               stroke="currentColor" 
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
           {localPresence?.joinable && localPresence.placeId && localPresence.gameId ? (
             <a 
               href={`roblox://experiences/start?placeId=${localPresence.placeId}&gameInstanceId=${localPresence.gameId}`}
-              className="px-4 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-white font-[family-name:var(--font-jetbrains-mono)] text-xs uppercase tracking-wider transition-colors flex items-center gap-2"
+              className="btn btn-primary"
             >
               Join Game
             </a>
           ) : localPresence?.joinsOff ? (
-            <div className="px-4 py-2 bg-[#1a1a1a] border border-[#333] text-[#888] font-[family-name:var(--font-jetbrains-mono)] text-xs uppercase tracking-wider flex items-center gap-2 cursor-not-allowed" title="User is in a game but joins are restricted">
+            <div className="btn btn-static text-fg-secondary" title="User is in a game but joins are restricted">
               Joins Off
             </div>
           ) : (
-            <div className="px-4 py-2 bg-[#111] border border-[#222] text-[#444] font-[family-name:var(--font-jetbrains-mono)] text-xs uppercase tracking-wider flex items-center gap-2 cursor-not-allowed" title="User is not currently playing a game">
+            <div className="btn btn-static" title="User is not currently playing a game">
               Not In Game
             </div>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-        <div className="xl:col-span-4 flex flex-col gap-4">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 xl:grid-cols-12">
+        <div className="flex min-w-0 flex-col gap-4 xl:col-span-4">
           {/* AI Analysis */}
       <Section title="AI Analysis" icon="⚠">
         <div className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between">
-            <span className="text-xs text-[#888] uppercase tracking-wide">
+          <div className="flex items-baseline justify-between gap-4">
+            <span className="text-[13px] text-fg-secondary">
               Suspicion Rating
             </span>
             <span
-              className={`font-[family-name:var(--font-jetbrains-mono)] text-2xl font-bold ${scoreColor}`}
+              className={`text-3xl font-semibold tabular-nums tracking-tight ${scoreColor}`}
             >
               {data.aiAnalysis.score}%
             </span>
           </div>
           <SuspicionBar score={data.aiAnalysis.score} />
-          <div className="font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#aaa] mt-1">
+          <div className="mt-1 text-[13px] leading-relaxed text-fg">
             {data.aiAnalysis.verdict}
           </div>
           {data.aiAnalysis.factors.length > 0 && (
-            <div className="mt-2 flex flex-col gap-1">
-              <span className="text-[10px] text-[#666] uppercase tracking-widest">
+            <div className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-4">
+              <span className="label-micro">
                 Factors
               </span>
               {data.aiAnalysis.factors.map((factor) => (
                 <div
                   key={factor}
-                  className="font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#999] pl-2 border-l-2 border-[#333]"
+                  className="border-l-2 border-border pl-3 text-[13px] leading-relaxed text-fg-secondary"
                 >
                   {factor}
                 </div>
@@ -394,10 +429,10 @@ export default function Dashboard({ data }: DashboardProps) {
           <DataRow
             label="Name History"
             value={
-              <div className="max-h-48 overflow-y-auto pr-2 flex flex-col items-start w-full mt-2 scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
+              <div className="flex max-h-48 w-full flex-col items-start overflow-y-auto pr-2">
                 {data.nameHistory.map((name, i) => (
-                  <div key={i} className="text-left w-full pb-1 text-[#e5e5e5]">
-                    <span className="text-[#555] mr-2">•</span>{name}
+                  <div key={i} className="w-full py-1 text-left text-fg">
+                    <span className="mr-2 text-fg-muted">•</span>{name}
                   </div>
                 ))}
               </div>
@@ -407,9 +442,62 @@ export default function Dashboard({ data }: DashboardProps) {
           />
         </div>
       </Section>
+
+      {/* Bot & Alt Analysis */}
+      {data.botAnalysis && (
+        <Section title="Bot & Alt Detection" icon="🤖">
+          <div className="flex flex-col gap-3">
+            {data.botAnalysis.isLikelyBot && (
+              <div className="flex items-center gap-2 border border-danger-line bg-danger-subtle px-3 py-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.06em] text-danger">⚠ Likely Bot Account</span>
+              </div>
+            )}
+            {data.botAnalysis.isLikelyAlt && !data.botAnalysis.isLikelyBot && (
+              <div className="flex items-center gap-2 border border-warning-line bg-warning-subtle px-3 py-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.06em] text-warning">⚠ Possible Alt Account</span>
+              </div>
+            )}
+            {!data.botAnalysis.isLikelyBot && !data.botAnalysis.isLikelyAlt && data.botAnalysis.signatures.length === 0 && (
+              <div className="flex items-center gap-2 border border-success-line bg-success-subtle px-3 py-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.06em] text-success">✓ No Bot/Alt Indicators Flagged</span>
+              </div>
+            )}
+            {data.botAnalysis.signatures.map((sig, i) => (
+              <div
+                key={i}
+                className="border-l-2 border-border pl-3 text-[13px] leading-relaxed text-fg-secondary"
+              >
+                {sig}
+              </div>
+            ))}
+            <DataRow
+              label="Possible Similar Usernames"
+              value={
+                data.botAnalysis.similarUsernames && data.botAnalysis.similarUsernames.length > 0 ? (
+                  <div className="flex max-h-48 w-full flex-col items-start overflow-y-auto pr-2">
+                    {data.botAnalysis.similarUsernames.map((name, i) => (
+                      <a 
+                        key={i} 
+                        href={`/lookup/${name}`}
+                        className="w-full py-1 text-left text-fg transition-colors duration-150 hover:text-accent-hover"
+                      >
+                        <span className="mr-2 text-fg-muted">•</span>{name}
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-[13px] text-fg-muted">None detected</span>
+                )
+              }
+              mono
+              isBlock={Boolean(data.botAnalysis.similarUsernames && data.botAnalysis.similarUsernames.length > 0)}
+            />
+          </div>
+        </Section>
+      )}
         </div>
 
-        <div className="xl:col-span-3 flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4 xl:col-span-3">
           {/* Connections */}
       <Section title="Connections" icon="⇄">
         <div className="grid grid-cols-3 gap-2">
@@ -418,9 +506,9 @@ export default function Dashboard({ data }: DashboardProps) {
           <StatBlock label="Following" value={data.connections.following} onClick={() => fetchConnections("following")} />
         </div>
         {data.bannedFriends && data.bannedFriends.bannedCount > 0 && (
-          <div className="mt-3 flex items-center justify-between border border-[#331111] bg-[#1a0a0a] px-3 py-2">
-            <span className="text-xs text-[#888] uppercase tracking-wide">Terminated Friends</span>
-            <span className="font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#ef4444]">
+          <div className="mt-3 flex items-center justify-between gap-3 border border-danger-line bg-danger-subtle px-3 py-2">
+            <span className="text-[13px] text-fg-secondary">Terminated Friends</span>
+            <span className="text-[13px] tabular-nums text-danger">
               {data.bannedFriends.bannedCount} / {data.bannedFriends.totalFriends} ({data.bannedFriends.bannedPercentage.toFixed(1)}%)
             </span>
           </div>
@@ -435,7 +523,7 @@ export default function Dashboard({ data }: DashboardProps) {
           data.groups.details && data.groups.details.length > 0 && (
             <button 
               onClick={() => setIsGroupsModalOpen(true)}
-              className="text-[10px] px-2 py-1 bg-[#333] hover:bg-[#444] text-[#ccc] uppercase tracking-wider transition-colors"
+              className="btn btn-secondary h-7 px-2.5 text-xs"
             >
               Details
             </button>
@@ -461,11 +549,11 @@ export default function Dashboard({ data }: DashboardProps) {
       <Section title="Inventory" icon="◈">
         <div className="flex flex-col gap-0">
           {data.inventory.isPrivate ? (
-            <div className="py-2 text-sm text-[#888] italic">
+            <div className="py-2 text-[13px] text-fg-muted">
               Inventory is Private
             </div>
           ) : data.inventory.totalAssets === 0 ? (
-            <div className="py-2 text-sm text-[#888] italic">
+            <div className="py-2 text-[13px] text-fg-muted">
               No collectibles found.
             </div>
           ) : (
@@ -490,11 +578,11 @@ export default function Dashboard({ data }: DashboardProps) {
         <Section title="Gamepasses (Self-Created)" icon="★">
           <div className="flex flex-col gap-0">
             {data.inventory.isPrivate ? (
-              <div className="py-2 text-sm text-[#888] italic">
+              <div className="py-2 text-[13px] text-fg-muted">
                 Inventory is Private
               </div>
             ) : data.gamepasses.createdCount === 0 ? (
-              <div className="py-2 text-sm text-[#888] italic">
+              <div className="py-2 text-[13px] text-fg-muted">
                 No personal gamepasses found.
               </div>
             ) : (
@@ -514,60 +602,14 @@ export default function Dashboard({ data }: DashboardProps) {
           </div>
         </Section>
       )}
-
-      {/* Bot & Alt Analysis */}
-      {data.botAnalysis && data.botAnalysis.signatures.length > 0 && (
-        <Section title="Bot & Alt Detection" icon="🤖">
-          <div className="flex flex-col gap-2">
-            {data.botAnalysis.isLikelyBot && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-[#1a0a0a] border border-[#331111]">
-                <span className="text-[#ef4444] text-xs font-bold uppercase">⚠ Likely Bot Account</span>
-              </div>
-            )}
-            {data.botAnalysis.isLikelyAlt && !data.botAnalysis.isLikelyBot && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-[#1a1a0a] border border-[#333111]">
-                <span className="text-[#facc15] text-xs font-bold uppercase">⚠ Possible Alt Account</span>
-              </div>
-            )}
-            {data.botAnalysis.signatures.map((sig, i) => (
-              <div
-                key={i}
-                className="font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#999] pl-2 border-l-2 border-[#333]"
-              >
-                {sig}
-              </div>
-            ))}
-            {data.botAnalysis.similarUsernames.length > 0 && (
-              <DataRow
-                label="Suspected Alt Accounts"
-                value={
-                  <div className="max-h-48 overflow-y-auto pr-2 flex flex-col items-start w-full mt-2 scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
-                    {data.botAnalysis.similarUsernames.map((name, i) => (
-                      <a 
-                        key={i} 
-                        href={`/lookup/${name}`}
-                        className="text-left w-full pb-1 text-[#e5e5e5] hover:text-white hover:underline transition-all"
-                      >
-                        <span className="text-[#555] mr-2">•</span>{name}
-                      </a>
-                    ))}
-                  </div>
-                }
-                mono
-                isBlock
-              />
-            )}
-          </div>
-        </Section>
-      )}
         </div>
 
-        <div className="xl:col-span-5 flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2 xl:col-span-5">
       {/* Badges */}
       <Section title="Roblox Badges" icon="✪">
         <div className="flex flex-col gap-0">
           {data.inventory.isPrivate ? (
-            <div className="py-2 text-sm text-[#888] italic">
+            <div className="py-2 text-[13px] text-fg-muted">
               Inventory is Private
             </div>
           ) : (
@@ -590,46 +632,46 @@ export default function Dashboard({ data }: DashboardProps) {
                 />
               )}
               {(data.badges?.total && data.badges.total > 0) ? (
-            <div className="mt-4 border-t border-[#333] pt-4 px-4 pb-4 bg-[#1a1a1a]">
-              <h4 className="text-xs uppercase tracking-wider text-[#888] mb-4">Badge Acquisition Timeline</h4>
+            <div className="mt-4 border border-border bg-background p-4">
+              <h3 className="label-micro mb-4">Badge Acquisition Timeline</h3>
               
               {!timelineData && !isTimelineLoading && (
-                <div className="flex flex-col items-center justify-center h-32 border border-dashed border-[#333] rounded-sm bg-[#111]">
-                  <p className="text-xs text-[#888] mb-3 text-center px-4">
+                <div className="flex h-32 flex-col items-center justify-center border border-dashed border-border px-4">
+                  <p className="mb-3 text-center text-[13px] text-fg-secondary">
                     Generating the timeline graph may take some time to complete.
                   </p>
                   <button 
                     onClick={fetchTimeline}
-                    className="px-4 py-2 bg-[#333] hover:bg-[#444] text-[#fff] text-xs font-[family-name:var(--font-jetbrains-mono)] transition-colors"
+                    className="btn btn-primary btn-sm"
                   >
                     Load Timeline
                   </button>
                   {timelineError && (
-                    <p className="text-xs text-red-500 mt-2">{timelineError}</p>
+                    <p className="mt-2 text-center text-xs text-danger" role="alert">{timelineError}</p>
                   )}
                 </div>
               )}
 
               {isTimelineLoading && (
-                <div className="flex flex-col items-center justify-center h-32 border border-dashed border-[#333] rounded-sm bg-[#111]">
-                  <div className="w-6 h-6 border-2 border-[#555] border-t-[#fff] rounded-full animate-spin mb-3"></div>
-                  <p className="text-xs text-[#888] font-[family-name:var(--font-jetbrains-mono)]">
-                    Fetching badges & dates... Please wait...
+                <div className="flex h-32 flex-col items-center justify-center border border-dashed border-border" role="status">
+                  <div className="mb-3 h-6 w-6 animate-spin rounded-full border-2 border-border border-t-accent"></div>
+                  <p className="text-[13px] text-fg-secondary">
+                    Fetching badges &amp; dates... Please wait...
                   </p>
                 </div>
               )}
 
               {timelineData && timelineData.length > 0 && (
-                <div className="h-[400px] w-full mt-4">
+                <div className="mt-2 h-[320px] w-full sm:h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={timelineData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                      <CartesianGrid strokeDasharray="2 4" stroke="#27313E" vertical={false} />
                       <XAxis 
                         dataKey="timestamp" 
                         type="number"
                         domain={xAxisDomain}
-                        stroke="#888" 
-                        tick={{ fill: '#888', fontSize: 10, angle: -45, textAnchor: 'end', dy: 8 }}
+                        stroke="#6E8099" 
+                        tick={{ fill: '#6E8099', fontSize: 11, angle: -45, textAnchor: 'end', dy: 8 }}
                         tickFormatter={(tick) => new Date(tick).getFullYear().toString()}
                         ticks={xAxisTicks}
                         tickLine={false}
@@ -637,8 +679,8 @@ export default function Dashboard({ data }: DashboardProps) {
                         height={45}
                       />
                       <YAxis 
-                        stroke="#888" 
-                        tick={{ fill: '#888', fontSize: 10 }}
+                        stroke="#6E8099" 
+                        tick={{ fill: '#6E8099', fontSize: 11 }}
                         domain={[0, yAxisMax]}
                         ticks={yAxisTicks}
                         interval={0}
@@ -654,9 +696,9 @@ export default function Dashboard({ data }: DashboardProps) {
                         dot={(props: any) => {
                           const { cx, cy, payload } = props;
                           if (payload.isFarming) {
-                            return <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={3} fill="rgba(239, 68, 68, 0.5)" stroke="none" />;
+                            return <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={3} fill="rgba(239, 138, 138, 0.6)" stroke="none" />;
                           }
-                          return <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={2} fill="rgba(255, 255, 255, 0.5)" stroke="none" />;
+                          return <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={2} fill="rgba(138, 196, 255, 0.55)" stroke="none" />;
                         }}
                         activeDot={false}
                         isAnimationActive={false}
@@ -675,37 +717,38 @@ export default function Dashboard({ data }: DashboardProps) {
 </div>
 </div>
       {isGroupsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#111] border border-[#333] w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl">
-            <div className="px-4 py-3 border-b border-[#333] flex justify-between items-center bg-[#0a0a0a]">
-              <h3 className="uppercase tracking-wide text-sm font-medium text-[#e5e5e5]">Group Details</h3>
-              <button onClick={() => setIsGroupsModalOpen(false)} className="text-[#888] hover:text-[#fff] text-lg leading-none transition-colors">✕</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
+          <div className="card flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden bg-surface-elevated" role="dialog" aria-modal="true" aria-labelledby="groups-modal-title">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <h3 id="groups-modal-title" className="text-sm font-medium text-fg">Group Details</h3>
+              <button onClick={() => setIsGroupsModalOpen(false)} className="btn btn-icon btn-sm text-fg-muted hover:bg-surface hover:text-fg" aria-label="Close">✕</button>
             </div>
-            <div className="p-3 border-b border-[#333] bg-[#0a0a0a]">
+            <div className="border-b border-border p-3">
               <input 
                 type="text" 
                 placeholder="Search groups..." 
                 value={groupSearchQuery}
                 onChange={(e) => setGroupSearchQuery(e.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#333] text-[#e5e5e5] text-xs px-3 py-2 outline-none focus:border-[#555] transition-colors"
+                aria-label="Search groups"
+                className="input h-9 px-3 text-[13px]"
               />
             </div>
-            <div className="p-4 overflow-y-auto flex flex-col gap-3 scrollbar-thin scrollbar-thumb-[#333]">
+            <div className="flex flex-col overflow-y-auto p-2">
               {filteredGroups && filteredGroups.length > 0 ? filteredGroups.map(g => (
-                <div key={g.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-[#222] pb-2 last:border-b-0 last:pb-0 gap-1 sm:gap-4">
+                <div key={g.id} className="flex flex-col gap-1 px-3 py-2.5 transition-colors duration-150 hover:bg-surface sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                   <a 
                     href={`https://www.roblox.com/groups/${g.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#e5e5e5] hover:text-white hover:underline truncate font-[family-name:var(--font-jetbrains-mono)] text-xs" 
+                    className="truncate text-[13px] text-fg transition-colors duration-150 hover:text-accent-hover" 
                     title={g.name}
                   >
                     {g.name}
                   </a>
-                  <span className="text-[#666] text-[10px] sm:text-right whitespace-nowrap">Rank: {g.rankName} ({g.rank})</span>
+                  <span className="whitespace-nowrap text-xs tabular-nums text-fg-muted sm:text-right">Rank: {g.rankName} ({g.rank})</span>
                 </div>
               )) : (
-                <div className="text-center text-[#666] text-xs py-4">No groups found</div>
+                <div className="py-6 text-center text-[13px] text-fg-muted">No groups found</div>
               )}
             </div>
           </div>
@@ -714,52 +757,53 @@ export default function Dashboard({ data }: DashboardProps) {
 
       {/* Connections Modal */}
       {activeConnectionType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#0a0a0a] border border-[#333] w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-[#222]">
-              <h3 className="font-[family-name:var(--font-jetbrains-mono)] text-sm text-[#e5e5e5] uppercase tracking-wider capitalize">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
+          <div className="card flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden bg-surface-elevated" role="dialog" aria-modal="true" aria-labelledby="connections-modal-title">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <h3 id="connections-modal-title" className="text-sm font-medium capitalize text-fg">
                 {activeConnectionType}
               </h3>
               <button 
                 onClick={() => setActiveConnectionType(null)}
-                className="text-[#666] hover:text-white transition-colors"
+                className="btn btn-icon btn-sm text-fg-muted hover:bg-surface hover:text-fg"
                 title="Close"
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
             
-            <div className="p-4 overflow-y-auto flex flex-col gap-3 scrollbar-thin scrollbar-thumb-[#333]">
+            <div className="flex flex-col gap-2 overflow-y-auto p-3">
               {isConnectionsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-[#333] border-t-[#fff] rounded-full animate-spin"></div>
+                <div className="flex items-center justify-center py-8" role="status">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-accent"></div>
                 </div>
               ) : connectionsError ? (
-                <div className="text-center text-[#ef4444] text-xs py-4">{connectionsError}</div>
+                <div className="py-6 text-center text-[13px] text-danger" role="alert">{connectionsError}</div>
               ) : connectionsData && connectionsData.length > 0 ? (
                 connectionsData.map((conn, idx) => (
-                  <div key={`conn-${conn.id}-${idx}`} className="flex items-center justify-between border border-[#222] p-2 bg-[#0f0f0f] hover:bg-[#1a1a1a] transition-colors">
-                    <div className="flex items-center gap-3">
+                  <div key={`conn-${conn.id}-${idx}`} className="flex items-center justify-between gap-3 border border-border bg-surface p-2 transition-colors duration-150 hover:border-border-strong">
+                    <div className="flex min-w-0 items-center gap-3">
                       {conn.avatarUrl ? (
-                        <img src={conn.avatarUrl} alt={conn.name} className="w-8 h-8 rounded-full border border-[#333]" />
+                        <img src={conn.avatarUrl} alt={conn.name} className="h-8 w-8 shrink-0 border border-border bg-background" />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-[#222] border border-[#333]"></div>
+                        <div className="h-8 w-8 shrink-0 border border-border bg-background"></div>
                       )}
-                      <div className="flex flex-col">
-                        <span className="font-[family-name:var(--font-jetbrains-mono)] text-xs text-[#e5e5e5]">{conn.displayName}</span>
-                        <span className="text-[10px] text-[#666]">@{conn.name}</span>
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate text-[13px] font-medium text-fg">{conn.displayName}</span>
+                        <span className="truncate text-xs text-fg-muted">@{conn.name}</span>
                       </div>
                     </div>
                     <button 
                       onClick={() => router.push(`/lookup/${conn.name}`)}
-                      className="px-3 py-1 bg-[#222] hover:bg-[#333] text-[10px] text-[#e5e5e5] uppercase tracking-wider transition-colors"
+                      className="btn btn-secondary btn-sm shrink-0"
                     >
                       Scan
                     </button>
                   </div>
                 ))
               ) : (
-                <div className="text-center text-[#666] text-xs py-4">No {activeConnectionType} found</div>
+                <div className="py-6 text-center text-[13px] text-fg-muted">No {activeConnectionType} found</div>
               )}
             </div>
           </div>

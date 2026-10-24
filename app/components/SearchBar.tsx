@@ -17,8 +17,8 @@ export default function SearchBar() {
   }
 
   return (
-    <div className="flex flex-col w-full max-w-lg gap-3">
-      <form onSubmit={handleSubmit} className="flex w-full gap-0">
+    <div className="flex w-full max-w-lg flex-col gap-3">
+      <form onSubmit={handleSubmit} className="flex w-full flex-col gap-2 sm:flex-row">
       <input
         type="text"
         value={query}
@@ -26,16 +26,17 @@ export default function SearchBar() {
         placeholder="Enter Roblox username or ID..."
         spellCheck={false}
         autoComplete="off"
-        className="flex-1 px-4 py-3 bg-[#111] border border-[#333] border-r-0 rounded-none text-[#e5e5e5] font-[family-name:var(--font-jetbrains-mono)] text-sm placeholder-[#555] outline-none focus:border-[#555]"
+        aria-label="Roblox username or ID"
+        className="input flex-1"
       />
       <button
         type="submit"
         disabled={isLoading || query.trim().length < 3}
-        className="px-6 py-3 min-w-[120px] bg-[#222] border border-[#333] rounded-none text-[#e5e5e5] font-[family-name:var(--font-jetbrains-mono)] text-sm uppercase tracking-wider flex justify-center items-center cursor-pointer hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed"
+        className="btn btn-primary h-11 min-w-[120px] px-6"
       >
         {isLoading ? (
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-[#888] border-t-transparent rounded-full animate-spin"></div>
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-background/40 border-t-background"></div>
           </div>
         ) : (
           "Scan"
@@ -43,7 +44,7 @@ export default function SearchBar() {
       </button>
       </form>
       {isLoading && (
-        <div className="text-[#888] font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-center animate-pulse">
+        <div className="animate-pulse text-center text-xs text-fg-secondary" role="status">
           Analyzing user profile... this may take up to a minute.
         </div>
       )}

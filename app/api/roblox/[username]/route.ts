@@ -487,10 +487,23 @@ export async function GET(
     `https://accountinformation.roblox.com/v1/users/${userId}/roblox-badges`,
   );
 
-  const avatarRes = await safeFetch<{ data: { imageUrl: string }[] }>(
-    `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png&isCircular=false`,
-  );
-  const avatarUrl = avatarRes?.data?.[0]?.imageUrl ?? "";
+  // Roblox thumbnails can return state "Pending" with null imageUrl; retry and fall back to headshot
+  async function fetchThumb(endpoint: string, size: string): Promise<string> {
+    for (let i = 0; i < 3; i++) {
+      const res = await safeFetch<{ data: { state: string; imageUrl: string | null }[] }>(
+        `https://thumbnails.roblox.com/v1/users/${endpoint}?userIds=${userId}&size=${size}&format=Png&isCircular=false`,
+        { cache: "no-store" },
+      );
+      const item = res?.data?.[0];
+      if (item?.imageUrl) return item.imageUrl;
+      if (item && item.state !== "Pending") break;
+      await new Promise((r) => setTimeout(r, 700));
+    }
+    return "";
+  }
+  const avatarUrl =
+    (await fetchThumb("avatar", "720x720")) ||
+    (await fetchThumb("avatar-headshot", "420x420"));
 
   // Extract values with fallbacks
   const userDetails =
@@ -558,47 +571,45 @@ export async function GET(
   let playerBadgesCount: number | undefined = undefined;
   let isPlayerBadgesLimited = false;
   let badgeTimelineData: BadgeTimelineData[] | undefined = undefined;
-  const rawBadgesCookie = process.env.ROBLOX_COOKIE;
-  const badgesCookie = rawBadgesCookie
-    ? rawBadgesCookie.replace(/^"|"$|^'|'$/g, "")
-    : undefined;
 
-  if (badgesCookie) {
+  const openCloudKey =
+    process.env.ROBLOX_OPEN_CLOUD_API_KEY || process.env.ROBLOX_API_KEY;
+
+  if (openCloudKey) {
     try {
-      playerBadgesCount = 0;
-      let url: string | null =
-        `https://badges.roblox.com/v1/users/${userId}/badges?limit=100&sortOrder=Desc`;
-      let pagesFetched = 0;
+      const OPEN_CLOUD_BASE = "https://apis.roblox.com/cloud/v2";
+      let pageToken: string | null = null;
+      let count = 0;
+      let maxPages = 50; // Cap at 5,000 badges to maintain fast response
 
-      const timelineMap: Record<string, number> = {};
-
-      while (url) {
-        const pBadgesRes: Response = await fetch(url, {
-          headers: { Cookie: `.ROBLOSECURITY=${badgesCookie}` },
+      do {
+        const pageUrl: string =
+          `${OPEN_CLOUD_BASE}/users/${userId}/inventory-items?filter=badges=true&maxPageSize=100` +
+          (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+        const res = await fetch(pageUrl, {
+          headers: { "x-api-key": openCloudKey },
           next: { revalidate: 3600 },
         });
 
-        if (!pBadgesRes.ok) break;
-
-        const pBadgesData: any = await pBadgesRes.json();
-        if (pBadgesData && pBadgesData.data) {
-          playerBadgesCount += pBadgesData.data.length;
-
-          if (pBadgesData.nextPageCursor) {
-            url = `https://badges.roblox.com/v1/users/${userId}/badges?limit=100&sortOrder=Desc&cursor=${pBadgesData.nextPageCursor}`;
-          } else {
-            url = null;
-          }
-        } else {
-          url = null;
+        if (res.status === 403) {
+          isPlayerBadgesLimited = true;
+          break;
         }
-        pagesFetched++;
-      }
 
-      // Timeline generation is now handled by a separate endpoint
-      // to improve initial profile loading speed.
+        if (!res.ok) break;
+
+        const data = await res.json();
+        const items = data.inventoryItems || [];
+        count += items.length;
+        pageToken = data.nextPageToken || null;
+        maxPages--;
+      } while (pageToken && maxPages > 0);
+
+      if (!isPlayerBadgesLimited) {
+        playerBadgesCount = count;
+      }
     } catch (e) {
-      console.error("Error fetching player badges:", e);
+      console.error("Error fetching player badges from Open Cloud:", e);
     }
   }
 
@@ -869,19 +880,73 @@ export async function GET(
     }
   }
 
-  // Check 5: Global User Search for Alts
+  // Check 5: Fast Pattern-Based Alt Lookup (Direct API, no rate limit)
+  try {
+    const rawBase = currentUsername.trim();
+    const cleanBase = cleanUsername(rawBase);
+    const candidateSet = new Set<string>();
+
+    const suffixes = [
+      "alt", "ALT", "_alt", "_ALT", "1", "2", "3", "01", "02",
+      "_", "__", "2nd", "backup", "main", "real", "official"
+    ];
+
+    for (const s of suffixes) {
+      candidateSet.add(`${rawBase}${s}`);
+      if (cleanBase !== rawBase.toLowerCase() && cleanBase.length >= 3) {
+        candidateSet.add(`${cleanBase}${s}`);
+      }
+    }
+    candidateSet.delete(rawBase.toLowerCase());
+
+    const candidateList = Array.from(candidateSet).slice(0, 50);
+    if (candidateList.length > 0) {
+      const candidatesRes = await fetch("https://users.roblox.com/v1/usernames/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usernames: candidateList, excludeBannedUsers: false }),
+        cache: "no-store",
+      });
+
+      if (candidatesRes.ok) {
+        const cData = await candidatesRes.json();
+        for (const found of cData.data || []) {
+          if (
+            found.name &&
+            found.name.toLowerCase() !== currentUsername.toLowerCase() &&
+            isSimilarUsername(currentUsername, found.name)
+          ) {
+            similarUsernames.push(found.name);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // Ignore candidate lookup errors
+  }
+
+  // Check 6: Global User Search for Alts with Browser User-Agent
   try {
     const baseUsernameForSearch = cleanUsername(currentUsername);
-    if (baseUsernameForSearch.length >= 4) { // Only search if base name is sufficiently unique
+    if (baseUsernameForSearch.length >= 3) {
       const searchRes = await fetch(
-        `https://users.roblox.com/v1/users/search?keyword=${baseUsernameForSearch}&limit=25`,
-        { cache: "no-store", headers: authHeaders }
+        `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(baseUsernameForSearch)}&limit=25`,
+        {
+          cache: "no-store",
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+            Accept: "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.5",
+          },
+        }
       );
       if (searchRes.ok) {
         const searchData = await searchRes.json();
         if (searchData && searchData.data) {
           for (const searchUser of searchData.data) {
             if (
+              searchUser.name &&
               searchUser.name.toLowerCase() !== currentUsername.toLowerCase() &&
               isSimilarUsername(currentUsername, searchUser.name)
             ) {
